@@ -1,5 +1,4 @@
 anthropic
-alembic
 fastapi
 uvicorn
 python-dotenv
