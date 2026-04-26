@@ -6,7 +6,7 @@
   <title>MTB Settings Agent</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    body { font-family: sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
     .container { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 680px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
     h2 { color: #111; }
     #chat { height: 420px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -19,16 +19,53 @@
     #input:focus { border-color: #0070f3; }
     button { padding: 12px 20px; background: #0070f3; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
     button:disabled { background: #aaa; cursor: default; }
+    #auth-section { display: flex; flex-direction: column; gap: 12px; }
+    #auth-section input { padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; }
+    #auth-section input:focus { border-color: #0070f3; }
+    #auth-tabs { display: flex; gap: 8px; }
+    #auth-tabs button { flex: 1; background: #eee; color: #333; }
+    #auth-tabs button.active { background: #0070f3; color: white; }
+    #auth-error { color: #e00; font-size: 14px; display: none; }
+    #user-bar { display: flex; justify-content: space-between; align-items: center; }
+    #logout-btn { padding: 8px 14px; font-size: 13px; background: #eee; color: #333; }
+    #logout-btn:hover { background: #ddd; }
+    #chat-section { display: none; flex-direction: column; gap: 16px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>🤖 MTB Settings Agent</h2>
-    <p>Welcome to the MTB Settings Agent</p>
-    <div id="chat"></div>
-    <div id="controls">
-      <input id="input" type="text" placeholder="Ask anything..." />
-      <button id="btn" onclick="send()">Send</button>
+
+    <div id="auth-section">
+      <div id="auth-tabs">
+        <button class="active" onclick="showTab('login')">Login</button>
+        <button onclick="showTab('signup')">Sign Up</button>
+      </div>
+      <div id="login-form">
+        <input id="login-email" type="email" placeholder="Email" />
+        <input id="login-password" type="password" placeholder="Password" />
+        <button onclick="login()">Login</button>
+      </div>
+      <div id="signup-form" style="display:none; flex-direction:column; gap:8px;">
+        <input id="signup-name" type="text" placeholder="Name" />
+        <input id="signup-email" type="email" placeholder="Email" />
+        <input id="signup-password" type="password" placeholder="Password" />
+        <button onclick="signup()">Sign Up</button>
+      </div>
+      <div id="auth-error"></div>
+    </div>
+
+    <div id="chat-section">
+      <div id="user-bar">
+        <span id="user-name"></span>
+        <button id="logout-btn" onclick="logout()">Logout</button>
+      </div>
+      <p>Welcome to the MTB Settings Agent</p>
+      <div id="chat"></div>
+      <div id="controls">
+        <input id="input" type="text" placeholder="Ask anything..." />
+        <button id="btn" onclick="send()">Send</button>
+      </div>
     </div>
   </div>
 
@@ -36,6 +73,123 @@
     const input = document.getElementById("input");
     const btn = document.getElementById("btn");
     const chat = document.getElementById("chat");
+    const authSection = document.getElementById("auth-section");
+    const chatSection = document.getElementById("chat-section");
+    const authError = document.getElementById("auth-error");
+    const userNameEl = document.getElementById("user-name");
+
+    function getToken() {
+      return localStorage.getItem("token");
+    }
+
+    function setToken(token) {
+      localStorage.setItem("token", token);
+    }
+
+    function clearToken() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("userName");
+    }
+
+    function showAuthSection() {
+      authSection.style.display = "flex";
+      chatSection.style.display = "none";
+    }
+
+    function showChatSection(name) {
+      authSection.style.display = "none";
+      chatSection.style.display = "flex";
+      userNameEl.textContent = "👋 " + name;
+    }
+
+    function showTab(tab) {
+      document.getElementById("login-form").style.display = tab === "login" ? "flex" : "none";
+      document.getElementById("signup-form").style.display = tab === "signup" ? "flex" : "none";
+      document.querySelectorAll("#auth-tabs button").forEach((b, i) => {
+        b.classList.toggle("active", (i === 0 && tab === "login") || (i === 1 && tab === "signup"));
+      });
+      authError.style.display = "none";
+    }
+
+    document.getElementById("login-form").style.display = "flex";
+    document.getElementById("login-form").style.flexDirection = "column";
+    document.getElementById("login-form").style.gap = "8px";
+
+    async function login() {
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      authError.style.display = "none";
+      try {
+        const res = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          showError(data.detail || "Login failed");
+          return;
+        }
+        const data = await res.json();
+        setToken(data.access_token);
+        await fetchCurrentUser();
+      } catch (err) {
+        showError("Login failed: " + err.message);
+      }
+    }
+
+    async function signup() {
+      const name = document.getElementById("signup-name").value.trim();
+      const email = document.getElementById("signup-email").value.trim();
+      const password = document.getElementById("signup-password").value;
+      authError.style.display = "none";
+      try {
+        const res = await fetch("/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password })
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          showError(data.detail || "Signup failed");
+          return;
+        }
+        const data = await res.json();
+        setToken(data.access_token);
+        await fetchCurrentUser();
+      } catch (err) {
+        showError("Signup failed: " + err.message);
+      }
+    }
+
+    async function fetchCurrentUser() {
+      const token = getToken();
+      if (!token) { showAuthSection(); return; }
+      try {
+        const res = await fetch("/auth/me", {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        if (!res.ok) { clearToken(); showAuthSection(); return; }
+        const user = await res.json();
+        localStorage.setItem("userName", user.name);
+        showChatSection(user.name);
+        addBubble("Siemandero!", "agent");
+      } catch {
+        clearToken();
+        showAuthSection();
+      }
+    }
+
+    function logout() {
+      clearToken();
+      chat.innerHTML = "";
+      showAuthSection();
+    }
+
+    function showError(msg) {
+      authError.textContent = msg;
+      authError.style.display = "block";
+    }
 
     input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
 
@@ -50,11 +204,21 @@
       const typing = addBubble("Thinking...", "typing");
 
       try {
+        const token = getToken();
         const res = await fetch("/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
           body: JSON.stringify({ message: msg })
         });
+        if (res.status === 401) {
+          typing.remove();
+          clearToken();
+          showAuthSection();
+          return;
+        }
         const data = await res.json();
         typing.remove();
         addBubble(data.response, "agent");
@@ -77,7 +241,12 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-      addBubble("Siemandero!", "agent");
+      const token = getToken();
+      if (token) {
+        fetchCurrentUser();
+      } else {
+        showAuthSection();
+      }
     });
   </script>
 </body>
