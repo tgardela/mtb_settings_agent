@@ -18,8 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install anthropic fastapi uvicorn python-dotenv tavily-python pytest ruff
+        run: pip install -r requirements.txt
 
       - name: Run ruff
         run: ruff check .
