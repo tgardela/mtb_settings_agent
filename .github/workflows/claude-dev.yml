@@ -54,76 +54,70 @@ jobs:
             - Title the PR: "${{ github.event.issue.title }}"
             - Reference issue #${{ github.event.issue.number }} in the PR body
 
-      - name: Rename Claude branch
+      - name: Wait for Claude branch and rename it
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           NUMBER="${{ github.event.issue.number }}"
 
-          # Find Claude's branch
-          OLD_BRANCH=$(git ls-remote --heads origin "claude/issue-${NUMBER}-*" | head -1 | sed 's/.*refs\/heads\///')
+          # Wait for Claude's branch to appear
+          echo "Waiting for Claude branch to appear..."
+          OLD_BRANCH=""
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            OLD_BRANCH=$(git ls-remote --heads origin "claude/issue-${NUMBER}-*" | head -1 | sed 's/.*refs\/heads\///')
+            if [ -n "$OLD_BRANCH" ]; then
+              echo "Found Claude branch: $OLD_BRANCH"
+              break
+            fi
+            echo "Attempt $i: Claude branch not found yet, waiting 10s..."
+            sleep 10
+          done
 
-          if [ -n "$OLD_BRANCH" ]; then
-            # Fetch current issue title and convert to branch name format
-            ISSUE_TITLE=$(gh issue view $NUMBER --repo ${{ github.repository }} --json title --jq '.title')
-
-            # Convert: lowercase, remove special chars, spaces to underscores
-            NEW_BRANCH=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9 ]//g' | tr ' ' '_' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
-
-            echo "Renaming: $OLD_BRANCH -> $NEW_BRANCH"
-
-            # Create new branch from old and delete old
-            git fetch origin "$OLD_BRANCH"
-            git checkout -b "$NEW_BRANCH" "origin/$OLD_BRANCH"
-            git push origin "$NEW_BRANCH"
-            git push origin --delete "$OLD_BRANCH" || true
-          else
-            echo "No Claude branch found to rename"
+          if [ -z "$OLD_BRANCH" ]; then
+            echo "No Claude branch found after waiting"
+            exit 1
           fi
+
+          # Fetch current issue title and convert to branch name
+          ISSUE_TITLE=$(gh issue view $NUMBER --repo ${{ github.repository }} --json title --jq '.title')
+          NEW_BRANCH=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9 ]//g' | tr ' ' '_' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+
+          echo "Renaming: $OLD_BRANCH -> $NEW_BRANCH"
+
+          git fetch origin "$OLD_BRANCH"
+          git checkout -b "$NEW_BRANCH" "origin/$OLD_BRANCH"
+          git push origin "$NEW_BRANCH"
+          git push origin --delete "$OLD_BRANCH" || true
+
+          # Save branch name for next step
+          echo "NEW_BRANCH=$NEW_BRANCH" >> $GITHUB_ENV
+          echo "ISSUE_TITLE=$ISSUE_TITLE" >> $GITHUB_ENV
 
       - name: Create Pull Request
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Waiting for branch to appear..."
-          BRANCH=""
           NUMBER="${{ github.event.issue.number }}"
+          BRANCH="${{ env.NEW_BRANCH }}"
+          ISSUE_TITLE="${{ env.ISSUE_TITLE }}"
 
-          # Fetch the current issue title
-          ISSUE_TITLE=$(gh issue view $NUMBER --repo ${{ github.repository }} --json title --jq '.title')
-          echo "Current issue title: $ISSUE_TITLE"
+          echo "Creating PR from branch: $BRANCH"
 
-          # Convert title to branch name (same logic as rename step)
-          EXPECTED_BRANCH=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9 ]//g' | tr ' ' '_' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
-          echo "Looking for branch: $EXPECTED_BRANCH"
+          PR_URL=$(gh pr create \
+            --title "$ISSUE_TITLE" \
+            --body "Closes #${NUMBER}" \
+            --base main \
+            --head "$BRANCH" \
+            --repo ${{ github.repository }} 2>&1) || true
 
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            BRANCH=$(git ls-remote --heads origin "$EXPECTED_BRANCH" | head -1 | sed 's/.*refs\/heads\///')
-            if [ -n "$BRANCH" ]; then
-              echo "Found branch: $BRANCH"
-              break
-            fi
-            echo "Attempt $i: branch not found yet, waiting 10s..."
-            sleep 10
-          done
+          echo "PR URL: $PR_URL"
 
-          if [ -n "$BRANCH" ]; then
-            PR_URL=$(gh pr create \
-              --title "$ISSUE_TITLE" \
-              --body "Closes #${NUMBER}" \
-              --base main \
-              --head "$BRANCH" \
-              --repo ${{ github.repository }} 2>&1) || true
-
-            echo "PR URL: $PR_URL"
-
-            if [[ "$PR_URL" == https* ]]; then
-              gh issue comment $NUMBER \
-                --body "🚀 PR created: $PR_URL" \
-                --repo ${{ github.repository }}
-            fi
+          if [[ "$PR_URL" == https* ]]; then
+            gh issue comment $NUMBER \
+              --body "🚀 PR created: $PR_URL" \
+              --repo ${{ github.repository }}
           else
-            echo "No branch found after waiting, skipping PR creation"
+            echo "PR creation failed or PR already exists: $PR_URL"
           fi
