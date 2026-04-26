@@ -8,15 +8,22 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from jose import JWTError
 
+from alembic.config import Config
+from alembic import command
+
 from agent import run_agent
 from auth import decode_token
-from database import engine, get_db
-from models import Base, User
+from database import get_db
+from models import User
 from routers import auth_router, bikes_router, conversations_router, trails_router
 
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="MTB Settings Agent")
+
+
+@app.on_event("startup")
+def run_migrations():
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
 
 app.add_middleware(
     CORSMiddleware,
