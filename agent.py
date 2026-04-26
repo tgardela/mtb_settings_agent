@@ -2,8 +2,20 @@ import anthropic
 import os
 from tavily import TavilyClient
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+client = None
+tavily = None
+
+def get_client():
+    global client
+    if client is None:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    return client
+
+def get_tavily():
+    global tavily
+    if tavily is None:
+        tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+    return tavily
 
 TOOLS = [
     {
@@ -31,7 +43,7 @@ TOOLS = [
 ]
 
 def web_search(query: str) -> str:
-    results = tavily.search(query=query, max_results=3)
+    results = get_tavily().search(query=query, max_results=3)
     return "\n".join([r["content"] for r in results["results"]])
 
 def calculate(expression: str) -> str:
@@ -63,7 +75,7 @@ IMPORTANT RULES:
 - Always give practical, specific advice based on the user's question."""
 
     for _ in range(10):
-        response = client.messages.create(
+        response = get_client().messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1000,
             system=system,
