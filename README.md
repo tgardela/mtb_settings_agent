@@ -92,6 +92,23 @@ Railway is used to host the FastAPI server so it's accessible from anywhere.
 
 ---
 
+## Development Setup
+
+After cloning the repo, install the pre-commit hooks to enable automatic linting and testing before every commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+From now on, every `git commit` will automatically:
+- Run **ruff** to lint and auto-fix Python files
+- Run **pytest** to make sure all tests pass
+
+A commit will be blocked if any test fails.
+
+---
+
 ## 4. Automated Development Workflow
 
 This project uses a GitHub Issues → Claude Code → PR → Railway pipeline to automate development.
