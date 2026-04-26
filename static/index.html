@@ -45,7 +45,7 @@
       <div id="login-form">
         <input id="login-email" type="email" placeholder="Email" />
         <input id="login-password" type="password" placeholder="Password" />
-        <button onclick="login()">Login</button>
+        <button id="login-btn" onclick="login()">Login</button>
       </div>
       <div id="signup-form" style="display:none; flex-direction:column; gap:8px;">
         <input id="signup-name" type="text" placeholder="Name" />
@@ -121,40 +121,55 @@
 
     async function login() {
       const email = document.getElementById("login-email").value.trim();
-      const password = document.getElementById("login-password").value;
+      const password = document.getElementById("login-password").value.trim();
+      const btn = document.getElementById("login-btn");
+
       authError.style.display = "none";
       authSuccess.style.display = "none";
-      const loginBtn = document.querySelector("#login-form button");
-      loginBtn.disabled = true;
-      loginBtn.textContent = "Logging in...";
-      console.log("[auth] Attempting login for:", email);
+      btn.disabled = true;
+      btn.textContent = "Logging in...";
+
       try {
         const res = await fetch("/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password })
         });
-        console.log("[auth] Login response status:", res.status);
+
+        console.log("Login response status:", res.status);
+        const data = await res.json();
+        console.log("Login response data:", data);
+
         if (!res.ok) {
-          const data = await res.json();
-          console.log("[auth] Login error:", data);
-          if (res.status === 401) {
-            showError("Invalid email or password");
-          } else {
-            showError(data.detail || "Login failed");
-          }
+          showError(data.detail || "Login failed");
           return;
         }
-        const data = await res.json();
-        console.log("[auth] Login success");
-        setToken(data.access_token);
-        await fetchCurrentUser();
+
+        if (!data.access_token) {
+          showError("No token received from server");
+          console.error("Response had no access_token:", data);
+          return;
+        }
+
+        localStorage.setItem("token", data.access_token);
+        console.log("Token stored successfully");
+
+        const meRes = await fetch("/auth/me", {
+          headers: { "Authorization": "Bearer " + data.access_token }
+        });
+        const meData = await meRes.json();
+        console.log("User info:", meData);
+
+        localStorage.setItem("userName", meData.name);
+        showChatSection(meData.name);
+        addBubble("Welcome back, " + meData.name + "! Your conversations are now being saved.", "agent");
+
       } catch (err) {
-        console.error("[auth] Login error:", err);
-        showError("Something went wrong, please try again");
+        console.error("Login error:", err);
+        showError("Network error: " + err.message);
       } finally {
-        loginBtn.disabled = false;
-        loginBtn.textContent = "Login";
+        btn.disabled = false;
+        btn.textContent = "Login";
       }
     }
 
