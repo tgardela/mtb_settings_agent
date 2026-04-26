@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 import sys
 import os
 
@@ -7,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 REFUSAL_KEYWORDS = ["only answer", "not able to help", "outside my expertise"]
-MTB_KEYWORDS = ["mountain bike", "MTB", "cycling", "bike"]
+MTB_KEYWORDS = ["mountain bike", "MTB", "cycling", "bike", "ebike", "emtb"]
 
 
 def make_mock_response(text: str):
