@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 import sys
 import os
 
@@ -20,9 +20,10 @@ def make_mock_response(text: str):
     return response
 
 
-@patch("agent.client")
-def test_mtb_question_accepted(mock_client):
-    mock_client.messages.create.return_value = make_mock_response(
+@patch('agent.get_tavily')
+@patch('agent.get_client')
+def test_mtb_question_accepted(mock_client, mock_tavily):
+    mock_client.return_value.messages.create.return_value = make_mock_response(
         "For enduro riding, I recommend setting your suspension sag to around 30% for the rear and 25% for the front."
     )
     from agent import run_agent
@@ -30,9 +31,10 @@ def test_mtb_question_accepted(mock_client):
     assert not any(kw in response for kw in REFUSAL_KEYWORDS)
 
 
-@patch("agent.client")
-def test_emtb_question_accepted(mock_client):
-    mock_client.messages.create.return_value = make_mock_response(
+@patch('agent.get_tavily')
+@patch('agent.get_client')
+def test_emtb_question_accepted(mock_client, mock_tavily):
+    mock_client.return_value.messages.create.return_value = make_mock_response(
         "For trail riding under 5kg, consider the Specialized Turbo Levo SL or the Trek Rail SL."
     )
     from agent import run_agent
@@ -40,9 +42,10 @@ def test_emtb_question_accepted(mock_client):
     assert not any(kw in response for kw in REFUSAL_KEYWORDS)
 
 
-@patch("agent.client")
-def test_off_topic_question_rejected(mock_client):
-    mock_client.messages.create.return_value = make_mock_response(
+@patch('agent.get_tavily')
+@patch('agent.get_client')
+def test_off_topic_question_rejected(mock_client, mock_tavily):
+    mock_client.return_value.messages.create.return_value = make_mock_response(
         "I'm an MTB specialist assistant and can only help with mountain bike related questions. Paris is the capital of France, but I'm here to help with cycling and bike topics!"
     )
     from agent import run_agent
@@ -50,9 +53,10 @@ def test_off_topic_question_rejected(mock_client):
     assert any(kw in response for kw in MTB_KEYWORDS)
 
 
-@patch("agent.client")
-def test_cooking_question_rejected(mock_client):
-    mock_client.messages.create.return_value = make_mock_response(
+@patch('agent.get_tavily')
+@patch('agent.get_client')
+def test_cooking_question_rejected(mock_client, mock_tavily):
+    mock_client.return_value.messages.create.return_value = make_mock_response(
         "I'm sorry, I can only help with MTB and cycling questions. For cooking advice, please consult a culinary resource. Is there anything about mountain biking I can help you with?"
     )
     from agent import run_agent
