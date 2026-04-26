@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from agent import run_agent
 
-app = FastAPI(title="My AI Agent")
+app = FastAPI(title="MTB Settings Agent")
 
 app.add_middleware(
     CORSMiddleware,
