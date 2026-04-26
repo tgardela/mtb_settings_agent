@@ -26,6 +26,7 @@
     #auth-tabs button { flex: 1; background: #eee; color: #333; }
     #auth-tabs button.active { background: #0070f3; color: white; }
     #auth-error { color: #e00; font-size: 14px; display: none; }
+    #auth-success { color: #080; font-size: 14px; display: none; }
     #user-bar { display: flex; justify-content: space-between; align-items: center; }
     #logout-btn { padding: 8px 14px; font-size: 13px; background: #eee; color: #333; }
     #logout-btn:hover { background: #ddd; }
@@ -53,6 +54,7 @@
         <button onclick="signup()">Sign Up</button>
       </div>
       <div id="auth-error"></div>
+      <div id="auth-success"></div>
     </div>
 
     <div id="chat-section">
@@ -76,6 +78,7 @@
     const authSection = document.getElementById("auth-section");
     const chatSection = document.getElementById("chat-section");
     const authError = document.getElementById("auth-error");
+    const authSuccess = document.getElementById("auth-success");
     const userNameEl = document.getElementById("user-name");
 
     function getToken() {
@@ -109,6 +112,7 @@
         b.classList.toggle("active", (i === 0 && tab === "login") || (i === 1 && tab === "signup"));
       });
       authError.style.display = "none";
+      authSuccess.style.display = "none";
     }
 
     document.getElementById("login-form").style.display = "flex";
@@ -119,22 +123,38 @@
       const email = document.getElementById("login-email").value.trim();
       const password = document.getElementById("login-password").value;
       authError.style.display = "none";
+      authSuccess.style.display = "none";
+      const loginBtn = document.querySelector("#login-form button");
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Logging in...";
+      console.log("[auth] Attempting login for:", email);
       try {
         const res = await fetch("/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password })
         });
+        console.log("[auth] Login response status:", res.status);
         if (!res.ok) {
           const data = await res.json();
-          showError(data.detail || "Login failed");
+          console.log("[auth] Login error:", data);
+          if (res.status === 401) {
+            showError("Invalid email or password");
+          } else {
+            showError(data.detail || "Login failed");
+          }
           return;
         }
         const data = await res.json();
+        console.log("[auth] Login success");
         setToken(data.access_token);
         await fetchCurrentUser();
       } catch (err) {
-        showError("Login failed: " + err.message);
+        console.error("[auth] Login error:", err);
+        showError("Something went wrong, please try again");
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Login";
       }
     }
 
@@ -143,22 +163,53 @@
       const email = document.getElementById("signup-email").value.trim();
       const password = document.getElementById("signup-password").value;
       authError.style.display = "none";
+      authSuccess.style.display = "none";
+      const signupBtn = document.querySelector("#signup-form button");
+      signupBtn.disabled = true;
+      signupBtn.textContent = "Creating account...";
+      console.log("[auth] Attempting signup for:", email);
       try {
         const res = await fetch("/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, email, password })
         });
+        console.log("[auth] Signup response status:", res.status);
         if (!res.ok) {
           const data = await res.json();
-          showError(data.detail || "Signup failed");
+          console.log("[auth] Signup error:", data);
+          if (res.status === 409 || (data.detail && data.detail.toLowerCase().includes("exist"))) {
+            showError("This email is already registered");
+          } else {
+            showError(data.detail || "Signup failed");
+          }
           return;
         }
-        const data = await res.json();
-        setToken(data.access_token);
+        console.log("[auth] Signup success, logging in...");
+        showSuccess("Account created! Logging you in...");
+        const loginRes = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        if (!loginRes.ok) {
+          const loginData = await loginRes.json();
+          console.log("[auth] Auto-login after signup failed:", loginData);
+          showError("Account created but login failed. Please log in manually.");
+          showTab("login");
+          document.getElementById("login-email").value = email;
+          return;
+        }
+        const loginData = await loginRes.json();
+        console.log("[auth] Auto-login success");
+        setToken(loginData.access_token);
         await fetchCurrentUser();
       } catch (err) {
-        showError("Signup failed: " + err.message);
+        console.error("[auth] Signup error:", err);
+        showError("Something went wrong, please try again");
+      } finally {
+        signupBtn.disabled = false;
+        signupBtn.textContent = "Sign Up";
       }
     }
 
@@ -189,6 +240,13 @@
     function showError(msg) {
       authError.textContent = msg;
       authError.style.display = "block";
+      authSuccess.style.display = "none";
+    }
+
+    function showSuccess(msg) {
+      authSuccess.textContent = msg;
+      authSuccess.style.display = "block";
+      authError.style.display = "none";
     }
 
     input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
