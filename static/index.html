@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .container { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 680px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+    h2 { color: #111; }
+    #chat { height: 420px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .bubble { padding: 10px 14px; border-radius: 8px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; }
+    .user { background: #0070f3; color: white; align-self: flex-end; }
+    .agent { background: #f0f0f0; color: #333; align-self: flex-start; }
+    .typing { color: #aaa; font-style: italic; align-self: flex-start; }
+    #controls { display: flex; gap: 8px; }
+    #input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; }
+    #input:focus { border-color: #0070f3; }
+    button { padding: 12px 20px; background: #0070f3; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+    button:disabled { background: #aaa; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🤖 AI Agent</h2>
+    <p>Welcome to the basic AI Agent App</p>
+    <div id="chat"></div>
+    <div id="controls">
+      <input id="input" type="text" placeholder="Ask anything..." />
+      <button id="btn" onclick="send()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("input");
+    const btn = document.getElementById("btn");
+    const chat = document.getElementById("chat");
+
+    input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+    async function send() {
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      addBubble(msg, "user");
+      input.value = "";
+      btn.disabled = true;
+
+      const typing = addBubble("Thinking...", "typing");
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        typing.remove();
+        addBubble(data.response, "agent");
+      } catch (err) {
+        typing.remove();
+        addBubble("Error: " + err.message, "agent");
+      }
+
+      btn.disabled = false;
+      input.focus();
+    }
+
+    function addBubble(text, type) {
+      const div = document.createElement("div");
+      div.className = `bubble ${type}`;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      addBubble("Siemandero!", "agent");
+    });
+  </script>
+</body>
+</html>

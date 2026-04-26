@@ -1,0 +1,97 @@
+name: Claude Code Agent
+
+on:
+  issues:
+    types: [labeled, opened]
+
+jobs:
+
+  number-issue-title:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Add issue number to title
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT_TITLE="${{ github.event.issue.title }}"
+          NUMBER="${{ github.event.issue.number }}"
+          if [[ "$CURRENT_TITLE" != "${NUMBER}:"* ]]; then
+            gh issue edit $NUMBER \
+              --title "${NUMBER}: ${CURRENT_TITLE}" \
+              --repo ${{ github.repository }}
+          fi
+
+  claude-code:
+    if: github.event.action == 'labeled' && github.event.label.name == 'work_in_progress'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Claude Code Agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: "claude-sonnet-4-6"
+          trigger_phrase: ""
+          direct_prompt: |
+            Issue Title: ${{ github.event.issue.title }}
+            Issue Description:
+            ${{ github.event.issue.body }}
+            Instructions:
+            - Read the issue title and description carefully
+            - Make the required code changes in the repository
+            - Create a pull request with your changes
+            - Title the PR: "${{ github.event.issue.title }}"
+            - Reference issue #${{ github.event.issue.number }} in the PR body
+
+      - name: Create Pull Request
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting for Claude's branch to appear..."
+          BRANCH=""
+          NUMBER="${{ github.event.issue.number }}"
+
+          # Fetch the current issue title (already renamed with number prefix)
+          ISSUE_TITLE=$(gh issue view $NUMBER --repo ${{ github.repository }} --json title --jq '.title')
+          echo "Current issue title: $ISSUE_TITLE"
+
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            BRANCH=$(git ls-remote --heads origin "claude/issue-${NUMBER}-*" | head -1 | sed 's/.*refs\/heads\///')
+            if [ -n "$BRANCH" ]; then
+              echo "Found branch: $BRANCH"
+              break
+            fi
+            echo "Attempt $i: branch not found yet, waiting 10s..."
+            sleep 10
+          done
+
+          if [ -n "$BRANCH" ]; then
+            PR_URL=$(gh pr create \
+              --title "$ISSUE_TITLE" \
+              --body "Closes #${NUMBER}" \
+              --base main \
+              --head "$BRANCH" \
+              --repo ${{ github.repository }} 2>&1) || true
+
+            echo "PR URL: $PR_URL"
+
+            if [[ "$PR_URL" == https* ]]; then
+              gh issue comment $NUMBER \
+                --body "🚀 PR created: $PR_URL" \
+                --repo ${{ github.repository }}
+            fi
+          else
+            echo "No branch found after waiting, skipping PR creation"
+          fi
