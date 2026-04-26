@@ -343,6 +343,7 @@
           .catch(() => { clearToken(); showGuest(); });
       } else {
         showGuest();
+        addBubble("Hello guest, if you won't create a profile, your searches and settings won't be saved.", "agent");
       }
     });
   </script>
