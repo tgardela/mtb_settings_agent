@@ -1,16 +1,17 @@
 import traceback
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from jose import JWTError
 
 from agent import run_agent
+from auth import decode_token
 from database import engine, get_db
 from models import Base, User
-from routers.auth_router import get_current_user
 from routers import auth_router, bikes_router, conversations_router, trails_router
 
 Base.metadata.create_all(bind=engine)
@@ -45,8 +46,22 @@ class ChatResponse(BaseModel):
     response: str
 
 
+def get_optional_user(request: Request, db: Session = Depends(get_db)):
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        return db.query(User).filter(User.id == int(user_id)).first()
+    except (JWTError, ValueError):
+        return None
+
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def chat(request: ChatRequest, current_user: User = Depends(get_optional_user), db: Session = Depends(get_db)):
     try:
         result = run_agent(request.message)
         return ChatResponse(response=result)
