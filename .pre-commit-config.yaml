@@ -6,14 +6,14 @@ repos:
     rev: v0.4.4
     hooks:
       - id: ruff
-        args: [--fix, --exclude, alembic]
+        args: [--fix]
         types_or: [python]
 
   - repo: local
     hooks:
       - id: pytest
         name: pytest
-        entry: /usr/local/python/3.12.1/bin/python -m pytest tests/ -v
+        entry: pytest tests/ -v
         language: system
         types: [python]
         pass_filenames: false
