@@ -4,3 +4,5 @@ uvicorn
 python-dotenv
 tavily-python
 pytest
+pre-commit
+ruff
